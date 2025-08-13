@@ -1,0 +1,166 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ed0bd3bd-70e1-4c2c-908f-fbb23dc81043",
+      "name": "When clicking ‘Test workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://dev268788.service-now.com/api/now/table/incident",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "serviceNowBasicApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sysparm_limit",
+              "value": "1000"
+            },
+            {
+              "name": "sysparm_fields",
+              "value": "sys_id, number, short_description, state, priority, category, opened_at"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Accept\": \"application/json\",\n  \"Content-Type\": \"application/json\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        320
+      ],
+      "id": "7b7a0f4d-b4cb-4a88-8f1b-76bf25175d46",
+      "name": "HTTP Request",
+      "credentials": {
+        "serviceNowBasicApi": {
+          "id": "uQuQpxNetJEPJDI0",
+          "name": "Dhwani's Authentication"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items[0].json.result.map(incident => ({\n    json: {\n        sys_id: incident.sys_id || null,\n        number: incident.number || null,\n        short_description: incident.short_description \n            ? incident.short_description.replace(/'/g, \"''\") \n            : null,\n        state: incident.state || null,\n        priority: incident.priority && !isNaN(parseInt(incident.priority)) \n            ? parseInt(incident.priority) \n            : null,\n        category: incident.category || null,\n        assigned_to: incident.assigned_to ? incident.assigned_to.value : null,\n        assigned_to_name: incident.assigned_to ? incident.assigned_to.display_value : null,\n        impact: incident.impact || null,\n        urgency: incident.urgency || null,\n        resolution_time: incident.resolution_time && !isNaN(parseInt(incident.resolution_time)) \n            ? parseInt(incident.resolution_time) \n            : null,  // Convert to INT or NULL\n        opened_at: incident.opened_at && incident.opened_at !== \"null\" && incident.opened_at !== \"\" \n            ? incident.opened_at \n            : null\n    }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        320
+      ],
+      "id": "2461b9ea-4806-4c3f-a0c5-4502962657d8",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO servicenow_db.incidents (\n    sys_id, number, short_description, opened_at, state, priority, category, \n    assigned_to, assigned_to_name, impact, urgency, resolution_time\n)\nVALUES (\n    '{{ $json.sys_id }}', \n    '{{ $json.number }}', \n    REPLACE(NULLIF('{{ $json.short_description }}', ''), \"'\", \"''\"), \n    NULLIF('{{ $json.opened_at }}', ''), \n    '{{ $json.state }}', \n    NULLIF('{{ $json.priority }}', ''), \n    '{{ $json.category }}',\n    NULLIF('{{ $json.assigned_to }}', ''), \n    '{{ $json.assigned_to_name }}', \n    '{{ $json.impact }}', \n    '{{ $json.urgency }}', \n    IF('{{ $json.resolution_time }}' = 'null' OR '{{ $json.resolution_time }}' = '', NULL, '{{ $json.resolution_time }}')\n)\nON DUPLICATE KEY UPDATE\n    short_description = REPLACE(NULLIF('{{ $json.short_description }}', ''), \"'\", \"''\"),\n    state = VALUES(state),\n    priority = VALUES(priority),\n    category = VALUES(category),\n    assigned_to = VALUES(assigned_to),\n    assigned_to_name = VALUES(assigned_to_name),\n    impact = VALUES(impact),\n    urgency = VALUES(urgency),\n    resolution_time = IF(VALUES(resolution_time) = 'null' OR VALUES(resolution_time) = '', NULL, VALUES(resolution_time));\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        720,
+        320
+      ],
+      "id": "06bec360-5078-4fcb-a6d1-492460d16dc3",
+      "name": "MySQL",
+      "credentials": {
+        "mySql": {
+          "id": "bhDkM1AmxcbGWFE0",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -60,
+        400
+      ],
+      "id": "fd778224-eb5c-4228-b7f8-9457a9ff6867",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Test workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "047394dc-fad2-44e2-a092-8240b13326e4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "eb3197212e0bce196afbcda0546ebdffac9dcb398653e8526e446bbb90da540e"
+  },
+  "id": "0YcVOsrvDpG3qXVy",
+  "tags": []
+}
